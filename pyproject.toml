@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "kafka-ddos-usecase"
+version = "0.1.0"
+description = ""
+authors = ["leschiffres <letsiosm@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10, <3.13"
+kafka-python = "^2.0.2"
+numpy = "^1.26.1"
+ipdb = "^0.13.13"
+pytest = "^7.4.3"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

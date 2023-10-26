@@ -6,23 +6,6 @@ We decide to create a kafka topic where a service will post the received IPs in 
 and another service will consume those messages (`kafka_consumer`) to be able to determine which IPs should be banned, 
 because they are creating a huge flow of requests.
 
-## The algorithm
-
-Let's assume that we have We want to track down the IPs that send the most requests.
-One idea would be to store for each IP the amount of requests it has done. However this is extremely innefficient and in some cases not possible to implement, because of limited memory (there can be billions of IPs sending requests). 
-
-Thus, we want to be able to determine whether our system is under ddos attack using the least memory possible, while making sure that we parse the stream once or twice.
-
-One efficient algorithm is the Alon-Matias-Szegedy Algorithm for which the authors got the Goedel Prize. 
-Ideally given a stream of IPs, we would know the number of requests of all IPs and sum the square of their cardinality.
-To do so we would have to store for each IP the number of total requests. Instead the algorithm stores a single number in memory
-and tries to estimate the sum of square of frequencies.
-
-e.g. if the stream is a,b,c,b,d,a,c,d,a,b,d,c,a,a,b then a appears 5 times, b appears 4 times, and c and d appear 3 times.
-So the sum of square of those occurences is `5^2+4^2+3^2+3^2 = 59`
-
-So we can see based on this number how normal traffic looks like and when it spikes that should correspond to a DDoS attack.
-
 ## The Kafka Setup
 
 Start a docker container and find the kafka executables in the container with:
@@ -47,9 +30,27 @@ We initiate the kafka consumer with `poetry run python -m kafka_consumer` that c
 
 We start a producer with `poetry run python -m kafka_producer` and the consumer running in the background should handle them accordingly. 
 
+
+## The algorithm
+
+Let's assume that we have We want to track down the IPs that send the most requests.
+One idea would be to store for each IP the amount of requests it has done. However this is extremely innefficient and in some cases not possible to implement, because of limited memory (there can be billions of IPs sending requests). 
+
+Thus, we want to be able to determine whether our system is under ddos attack using the least memory possible, while making sure that we parse the stream once or twice.
+
+One efficient algorithm is the Alon-Matias-Szegedy Algorithm for which the authors got the Goedel Prize. 
+The idea behind the algorithm is that given a stream of IP requests, we try to estimate the sum of the square of their cardinality.
+
+e.g. if the stream is a,b,c,b,d,a,c,d,a,b,d,c,a,a,b then a appears 5 times, b appears 4 times, and c and d appear 3 times.
+So the sum of square of those occurences is `5^2+4^2+3^2+3^2 = 59`
+
+Ideally it would be great to store for each IP the number of total requests it has done. But sometimes this is not possible. The Alon-Matias-Szegedy algorithm instead stores a single number in memory that estimates this number.
+
+Overall, we get a random IP from the stream and measure its frequency and at the end we estimate this by $n(2*freq-1)$ where $n$ is the size of the stream, and $freq$ the total requests by this IP. It can be proven that we if we do this many times, this method offers a good approximation of the number we want to estimate. For more details please see to the Mining Massive Datasets corresponding chapter.
+
 ## Restarting kafka stream from an outage
 
-Let's say at some point the consumer went down for whatever reason. 
+Let's say at some point the consumer went down for whatever reason.
 
 To check the latest committed offset one can run:
 ```bash
@@ -62,12 +63,8 @@ In the current consumer we commit an offset every 1000 messages. However one can
 kcat -b localhost:9092 -t api_requests -o 500 -c 10
 ```
 
-```bash
-kafka-consumer-groups.sh --bootstrap-server localhost:9092 --group ddos_detection_group --topic api_requests --reset-offsets --to-offset 100 --dry-run
-```
-
-To reset the offset to a datetime
+Before resetting the offset, make sure that the consumers are not running. To reset the ofset at a specific value e.g. 100 one can run the following command:
 
 ```bash
-kafka-consumer-groups.sh --bootstrap-server localhost:9092 --group ddos_detection_group --reset-offsets --to-datetime 2023-10-25T00:00:00.000 --topic api_requests --execute
+kafka-consumer-groups.sh --bootstrap-server localhost:9092 --group ddos_detection_group --topic api_requests --reset-offsets --to-offset 100 --execute
 ```
